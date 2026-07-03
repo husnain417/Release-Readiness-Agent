@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -19,6 +20,9 @@ from supabase_client import (
     save_tool_calls,
 )
 from tools import run_tools_pipeline
+
+logger = logging.getLogger("release_agent")
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="Release Readiness Agent", version="2.0.0")
 
@@ -81,7 +85,13 @@ async def _run_deep_agent(input_text: str) -> tuple[list[dict], str]:
     messages = result["messages"]
     tool_rows = extract_tool_rows(messages)
     if not tool_rows:
-        raise RuntimeError("Agent completed without calling any tools")
+        last = messages[-1] if messages else None
+        detail = (
+            f"last_message_type={type(last).__name__ if last else 'none'}, "
+            f"content_len={len(str(getattr(last, 'content', '') or ''))}, "
+            f"tool_calls={getattr(last, 'tool_calls', None) if last else None}"
+        )
+        raise RuntimeError(f"Agent completed without calling any tools ({detail})")
     assistant_text = messages[-1].content
     return tool_rows, assistant_text
 
@@ -107,8 +117,9 @@ async def review(req: ReviewRequest) -> ReviewResponse:
             try:
                 tool_rows, assistant_text = await _run_deep_agent(req.input_text)
             except Exception:
-                # Deterministic safety net: keep the review usable even if the LLM/agent
-                # call fails, times out, or hits a rate limit.
+                logger.exception(
+                    "Deep agent run failed, falling back to deterministic pipeline"
+                )
                 tool_rows, assistant_text = _run_fallback(req.input_text)
                 fallback_used = True
 

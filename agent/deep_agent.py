@@ -23,7 +23,7 @@ def _model_name(env_var: str, default: str) -> str:
 
 
 def _build_model() -> ChatGoogleGenerativeAI:
-    return ChatGoogleGenerativeAI(model=_model_name("AGENT_MODEL", "gemini-2.5-flash"))
+    return ChatGoogleGenerativeAI(model=_model_name("AGENT_MODEL", "gemini-2.5-flash-lite"))
 
 
 _model = _build_model()

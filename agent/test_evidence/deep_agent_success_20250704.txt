@@ -1,0 +1,31 @@
+Deep agent verification — gemini-2.5-flash-lite — 2025-07-04
+
+Model: ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite")
+Harness: create_deep_agent with incident-analyst subagent + full SYSTEM_PROMPT
+
+Input:
+  PR: Update payment webhook retry + auth policy. Migration: ALTER TABLE payments ADD COLUMN retry_count int.
+
+Result: SUCCESS (fallback_used would be false)
+
+Tool trace (top-level messages, matched by tool_call_id):
+  - flag_risky_diff_patterns
+  - check_test_coverage_mentioned
+  - check_breaking_api_changes
+  - task                    (incident-analyst subagent delegation)
+  - task                    (second component)
+  - generate_rollback_plan
+
+Final assistant message length: 748 chars (structured VERDICT/SUMMARY/ROLLBACK_PLAN/CONDITIONS)
+
+Note: Subagent-internal lookup_past_incidents calls do NOT appear as separate
+top-level rows — only the task delegation rows do (intentional context isolation).
+
+Contrast — gemini-2.5-flash (quota exhausted):
+  RuntimeError: Agent completed without calling any tools
+  (last_message_type=AIMessage, content_len=0, tool_calls=[])
+  After HTTP 429 retries, one 200 OK returned zero output tokens.
+
+Contrast — HTTP /review after quota burned on flash-lite:
+  google.genai.errors.ServerError: 503 UNAVAILABLE
+  (deep agent makes ~10+ Gemini calls per review; free tier is 20/day per model)
