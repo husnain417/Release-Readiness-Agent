@@ -80,6 +80,8 @@ export function ReleaseAgentApp() {
           rollback_plan: result.rollback_plan,
           status: "completed",
         });
+        setToolCalls([]);
+        setEvents([]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Review failed");
@@ -98,9 +100,8 @@ export function ReleaseAgentApp() {
           Release Readiness Agent
         </h1>
         <p className="max-w-3xl text-muted-foreground">
-          Paste a PR description or diff. The agent flags risky changes, checks
-          test coverage, looks up incident history, and recommends go / no-go
-          with a rollback plan.
+          Paste a PR description or diff. Release checks run first, then the
+          agent synthesizes a go / no-go verdict from those results.
         </p>
       </header>
 

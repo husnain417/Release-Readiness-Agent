@@ -19,8 +19,14 @@ export async function submitReview(
   });
 
   if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(detail || "Review failed");
+    let message = "Review failed";
+    try {
+      const body = await res.json();
+      message = body.detail ?? message;
+    } catch {
+      message = (await res.text()) || message;
+    }
+    throw new Error(message);
   }
 
   return res.json();

@@ -23,13 +23,13 @@ export function ReviewTrace({ events, toolCalls }: ReviewTraceProps) {
       <CardHeader>
         <CardTitle>Agent trace</CardTitle>
         <CardDescription>
-          Tool calls and message flow saved for this review.
+          Release checks that ran for this review and the synthesized verdict.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {toolCalls.length > 0 && (
           <div>
-            <h3 className="mb-3 text-sm font-medium">Tool calls</h3>
+            <h3 className="mb-3 text-sm font-medium">Release checks</h3>
             <ScrollArea className="h-64 rounded-lg border">
               <div className="divide-y">
                 {toolCalls.map((call) => (
