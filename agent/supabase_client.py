@@ -4,11 +4,7 @@ from typing import Any
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
-from parsers import (
-    extract_tool_calls,
-    resolve_review_fields,
-    serialize_messages,
-)
+from parsers import resolve_review_fields, serialize_messages
 
 load_dotenv()
 
@@ -42,15 +38,33 @@ def create_running_review(title: str, input_text: str) -> dict[str, Any]:
     return res.data[0]
 
 
-def save_review(
+def save_tool_calls(review_id: str, tool_rows: list[dict[str, Any]]) -> None:
+    if not tool_rows:
+        return
+    rows = [{**row, "review_id": review_id} for row in tool_rows]
+    get_supabase().table("tool_calls").insert(rows).execute()
+
+
+def save_review_events(review_id: str, events: list[dict[str, str]]) -> None:
+    if not events:
+        return
+    rows = [{**event, "review_id": review_id} for event in events]
+    get_supabase().table("review_events").insert(rows).execute()
+
+
+def finalize_review(
+    review_id: str,
     title: str,
     input_text: str,
-    summary: str,
-    messages: list[Any],
-    review_id: str | None = None,
+    assistant_text: str,
+    tool_rows: list[dict[str, Any]],
     status: str = "completed",
 ) -> dict[str, Any]:
-    fields = resolve_review_fields(messages, summary, input_text)
+    messages = [
+        {"role": "user", "content": input_text},
+        {"role": "assistant", "content": assistant_text},
+    ]
+    fields = resolve_review_fields(messages, assistant_text, input_text, tool_rows)
 
     review_payload = {
         "title": title,
@@ -61,29 +75,19 @@ def save_review(
         "status": status,
     }
 
-    supabase = get_supabase()
-    if review_id:
-        res = supabase.table("reviews").update(review_payload).eq("id", review_id).execute()
-        review = res.data[0] if res.data else {**review_payload, "id": review_id}
-    else:
-        res = supabase.table("reviews").insert(review_payload).execute()
-        review = res.data[0]
+    res = (
+        get_supabase()
+        .table("reviews")
+        .update(review_payload)
+        .eq("id", review_id)
+        .execute()
+    )
+    review = res.data[0] if res.data else {**review_payload, "id": review_id}
 
-    rid = review["id"]
-
-    events = [
-        {**event, "review_id": rid}
-        for event in serialize_messages(messages)
-    ]
-    if events:
-        supabase.table("review_events").insert(events).execute()
-
-    tool_rows = [
-        {**call, "review_id": rid}
-        for call in extract_tool_calls(messages)
-    ]
-    if tool_rows:
-        supabase.table("tool_calls").insert(tool_rows).execute()
+    save_review_events(
+        review_id,
+        serialize_messages(messages),
+    )
 
     return review
 

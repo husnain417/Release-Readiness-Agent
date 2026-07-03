@@ -1,5 +1,8 @@
 """Domain tools for release-readiness review."""
 
+import re
+from typing import Any
+
 RISKY_KEYWORDS: dict[str, str] = {
     "migration": "high",
     "alter table": "high",
@@ -30,6 +33,7 @@ TEST_SIGNALS = [
     "pytest",
     "jest",
     "vitest",
+    "test suite",
 ]
 
 INCIDENTS_DB: dict[str, str] = {
@@ -56,6 +60,39 @@ INCIDENTS_DB: dict[str, str] = {
     ),
 }
 
+COMPONENT_HINTS = ["auth", "payments", "database", "api", "cache", "queue"]
+
+TOOL_ORDER = [
+    "flag_risky_diff_patterns",
+    "check_test_coverage_mentioned",
+    "check_breaking_api_changes",
+    "lookup_past_incidents",
+    "generate_rollback_plan",
+]
+
+
+def _scrub_negated_phrases(text: str, keyword: str) -> str:
+    scrubbed = text
+    for prefix in (r"no\s+", r"without\s+", r"not\s+a\s+"):
+        scrubbed = re.sub(
+            rf"\b{prefix}{re.escape(keyword)}\b",
+            "",
+            scrubbed,
+            flags=re.IGNORECASE,
+        )
+    return scrubbed
+
+
+def _keyword_present(text: str, keyword: str) -> bool:
+    lowered = text.lower()
+    if keyword not in lowered:
+        return False
+    return keyword in _scrub_negated_phrases(lowered, keyword).lower()
+
+
+def _component_in_text(text: str, component: str) -> bool:
+    return bool(re.search(rf"\b{re.escape(component)}\b", text.lower()))
+
 
 def flag_risky_diff_patterns(diff_or_description: str) -> str:
     """Scans a PR diff or description for risky patterns: schema migrations,
@@ -64,7 +101,7 @@ def flag_risky_diff_patterns(diff_or_description: str) -> str:
     found: list[str] = []
     text = diff_or_description.lower()
     for keyword, severity in RISKY_KEYWORDS.items():
-        if keyword in text:
+        if _keyword_present(text, keyword):
             found.append(f"{keyword} (severity: {severity})")
     if not found:
         return "No risky patterns detected."
@@ -83,16 +120,20 @@ def check_test_coverage_mentioned(pr_description: str) -> str:
 def lookup_past_incidents(component_name: str) -> str:
     """Looks up a small seeded knowledge base of past incidents related to a component name."""
     lowered = component_name.lower()
-    matches = [value for key, value in INCIDENTS_DB.items() if key in lowered]
-    if matches:
-        return "\n".join(matches)
+    if lowered in INCIDENTS_DB:
+        return INCIDENTS_DB[lowered]
     return "No past incidents on record for this component."
 
 
 def generate_rollback_plan(change_summary: str) -> str:
     """Generates a basic rollback plan template based on the type of change described."""
     lowered = change_summary.lower()
-    if "migration" in lowered or "alter table" in lowered:
+    if "delete /" in lowered or "removed endpoint" in lowered:
+        return (
+            "Rollback plan: restore deleted endpoint/handlers, redeploy previous API "
+            "version, notify client teams, and monitor 4xx/5xx rates for 30 minutes."
+        )
+    if _keyword_present(lowered, "migration") or "alter table" in lowered:
         return (
             "Rollback plan: revert migration via down-script, restore from last "
             "snapshot if down-script unsafe, verify row counts post-rollback, "
@@ -103,7 +144,7 @@ def generate_rollback_plan(change_summary: str) -> str:
             "Rollback plan: disable feature flag immediately, verify traffic split "
             "returns to control, monitor error rates for 15 minutes."
         )
-    if "config" in lowered or "env" in lowered:
+    if "config" in lowered or re.search(r"\benv\b", lowered):
         return (
             "Rollback plan: revert config/env to previous values, redeploy if needed, "
             "verify health checks and smoke tests pass."
@@ -121,13 +162,89 @@ def check_breaking_api_changes(diff_or_description: str) -> str:
     breaking_signals = [
         ("removed endpoint", "high"),
         ("delete /", "high"),
-        ("breaking", "high"),
+        ("breaking change", "high"),
         ("deprecated", "medium"),
         ("response shape", "medium"),
         ("renamed field", "medium"),
         ("status code", "low"),
     ]
-    found = [f"{signal} (severity: {severity})" for signal, severity in breaking_signals if signal in text]
+    found = [
+        f"{signal} (severity: {severity})"
+        for signal, severity in breaking_signals
+        if signal in text
+    ]
     if not found:
         return "No obvious breaking API changes detected."
     return "Potential breaking API changes:\n" + "\n".join(found)
+
+
+def run_tools_pipeline(input_text: str) -> list[dict[str, Any]]:
+    """Run all release checks deterministically. Returns rows for tool_calls table."""
+    rows: list[dict[str, Any]] = []
+
+    risky = flag_risky_diff_patterns(input_text)
+    rows.append(
+        {
+            "tool_name": "flag_risky_diff_patterns",
+            "input": {"diff_or_description": input_text},
+            "output": risky,
+        }
+    )
+
+    tests = check_test_coverage_mentioned(input_text)
+    rows.append(
+        {
+            "tool_name": "check_test_coverage_mentioned",
+            "input": {"pr_description": input_text},
+            "output": tests,
+        }
+    )
+
+    breaking = check_breaking_api_changes(input_text)
+    rows.append(
+        {
+            "tool_name": "check_breaking_api_changes",
+            "input": {"diff_or_description": input_text},
+            "output": breaking,
+        }
+    )
+
+    for component in COMPONENT_HINTS:
+        if _component_in_text(input_text, component):
+            incident = lookup_past_incidents(component)
+            rows.append(
+                {
+                    "tool_name": "lookup_past_incidents",
+                    "input": {"component_name": component},
+                    "output": incident,
+                }
+            )
+
+    rollback = generate_rollback_plan(input_text)
+    rows.append(
+        {
+            "tool_name": "generate_rollback_plan",
+            "input": {"change_summary": input_text},
+            "output": rollback,
+        }
+    )
+
+    return rows
+
+
+def tool_results_dict(rows: list[dict[str, Any]]) -> dict[str, str]:
+    """Flatten pipeline rows into a single dict for synthesis."""
+    results: dict[str, str] = {}
+    incidents: list[str] = []
+    for row in rows:
+        name = row["tool_name"]
+        output = row["output"]
+        if name == "lookup_past_incidents":
+            if "No past incidents" not in output:
+                incidents.append(output)
+        else:
+            results[name] = output
+    results["lookup_past_incidents"] = (
+        "\n".join(incidents) if incidents else "No past incidents on record for this component."
+    )
+    return results

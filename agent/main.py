@@ -1,16 +1,18 @@
-import json
 import os
-from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from agent import agent
-from parsers import _message_content, get_best_assistant_summary, resolve_review_fields
-from supabase_client import create_running_review, mark_review_failed, save_review
+from graph import graph
+from supabase_client import (
+    create_running_review,
+    finalize_review,
+    mark_review_failed,
+    save_tool_calls,
+)
+from synthesis import RateLimitError, build_review_response
 
 load_dotenv()
 
@@ -45,30 +47,40 @@ def health() -> dict[str, str]:
 
 
 @app.post("/review", response_model=ReviewResponse)
-def review(req: ReviewRequest) -> ReviewResponse:
+async def review(req: ReviewRequest) -> ReviewResponse:
     title = req.title or req.input_text[:60].strip() or "Untitled review"
     review_row = create_running_review(title=title, input_text=req.input_text)
     review_id = review_row["id"]
 
     try:
-        result = agent.invoke(
-            {"messages": [{"role": "user", "content": req.input_text}]}
-        )
-        messages = result["messages"]
-        final_message = get_best_assistant_summary(messages) or _message_content(messages[-1])
+        result = await graph.ainvoke({"input_text": req.input_text})
+        tool_rows = result["tool_rows"]
+        assistant_text = result["assistant_text"]
 
-        saved = save_review(
+        save_tool_calls(review_id, tool_rows)
+
+        saved = finalize_review(
+            review_id=review_id,
             title=title,
             input_text=req.input_text,
-            summary=final_message,
-            messages=messages,
-            review_id=review_id,
+            assistant_text=assistant_text,
+            tool_rows=tool_rows,
         )
+
+        fields = build_review_response(req.input_text, assistant_text, tool_rows)
+
+    except RateLimitError:
+        mark_review_failed(review_id, "rate_limited")
+        raise HTTPException(
+            status_code=503,
+            detail="The review service is temporarily rate-limited. Please try again in a minute.",
+        ) from None
+    except TimeoutError as exc:
+        mark_review_failed(review_id, str(exc))
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
     except Exception as exc:
         mark_review_failed(review_id, str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-    fields = resolve_review_fields(messages, final_message, req.input_text)
 
     return ReviewResponse(
         review_id=saved["id"],
@@ -76,38 +88,3 @@ def review(req: ReviewRequest) -> ReviewResponse:
         verdict=fields["verdict"] or saved.get("verdict"),
         rollback_plan=fields["rollback_plan"] or saved.get("rollback_plan"),
     )
-
-
-@app.post("/review/stream")
-def review_stream(req: ReviewRequest) -> StreamingResponse:
-    """SSE stream of agent progress — optional polish endpoint."""
-
-    def event_stream():
-        title = req.title or req.input_text[:60].strip() or "Untitled review"
-        review_row = create_running_review(title=title, input_text=req.input_text)
-        review_id = review_row["id"]
-        messages: list[Any] = []
-
-        yield f"data: {json.dumps({'type': 'start', 'review_id': review_id})}\n\n"
-
-        try:
-            for state in agent.stream(
-                {"messages": [{"role": "user", "content": req.input_text}]},
-                stream_mode="values",
-            ):
-                messages = state.get("messages", messages)
-                yield f"data: {json.dumps({'type': 'update', 'message_count': len(messages)})}\n\n"
-            final_message = _message_content(messages[-1])
-            saved = save_review(
-                title=title,
-                input_text=req.input_text,
-                summary=final_message,
-                messages=messages,
-                review_id=review_id,
-            )
-            yield f"data: {json.dumps({'type': 'done', 'review_id': saved['id'], 'summary': saved.get('summary'), 'verdict': saved.get('verdict'), 'rollback_plan': saved.get('rollback_plan')})}\n\n"
-        except Exception as exc:
-            mark_review_failed(review_id, str(exc))
-            yield f"data: {json.dumps({'type': 'error', 'detail': str(exc)})}\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
