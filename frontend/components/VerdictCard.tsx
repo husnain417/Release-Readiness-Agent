@@ -39,9 +39,10 @@ const verdictConfig: Record<
 interface VerdictCardProps {
   review: Review | null;
   loading?: boolean;
+  fallbackUsed?: boolean;
 }
 
-export function VerdictCard({ review, loading }: VerdictCardProps) {
+export function VerdictCard({ review, loading, fallbackUsed }: VerdictCardProps) {
   if (loading) {
     return (
       <Card className="h-full">
@@ -108,6 +109,11 @@ export function VerdictCard({ review, loading }: VerdictCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {fallbackUsed && (
+          <p className="text-xs text-muted-foreground rounded-md border border-dashed px-3 py-2">
+            Computed via deterministic fallback (deep agent unavailable or DEMO_MODE).
+          </p>
+        )}
         {review.summary && (
           <div>
             <h3 className="mb-2 text-sm font-medium">Summary</h3>

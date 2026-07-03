@@ -35,4 +35,5 @@ export interface ReviewResponse {
   summary: string;
   verdict: Verdict | null;
   rollback_plan: string | null;
+  fallback_used?: boolean;
 }

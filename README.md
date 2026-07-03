@@ -2,34 +2,20 @@
 
 An AI agent that reviews PR descriptions and diffs before deploy. It flags risky changes, checks for missing tests, consults incident history, suggests a rollback plan, and logs every review to a browsable history.
 
-**Stack:** Next.js (Vercel) + FastAPI + LangGraph-style pipeline (Railway) + Supabase (Postgres)
+**Stack:** Next.js (Vercel) + FastAPI + deepagents/LangGraph (Railway) + Supabase (Postgres)
 
 ## How it works (harness design)
 
-This is a **deterministic-first orchestration**, not LLM-decided tool calling:
+Built on `deepagents` (`create_deep_agent`), a LangGraph-based Deep Agent harness. The LLM decides
+which tools to call and in what order, guided by a directive system prompt that requires all
+release checks to run. Incident-history lookups are delegated to an `incident-analyst` subagent
+with an isolated context window, so the main agent's context stays focused on the verdict.
 
-```
-PR input
-   │
-   ▼
-┌─────────────────────────────┐
-│  Tool pipeline (always runs) │  flag_risky_diff_patterns
-│  Fixed order, real function  │  check_test_coverage_mentioned
-│  calls with real inputs      │  check_breaking_api_changes
-│                              │  lookup_past_incidents (per component)
-│                              │  generate_rollback_plan
-└──────────────┬──────────────┘
-               │ tool results persisted to Supabase
-               ▼
-┌─────────────────────────────┐
-│  LLM synthesis (1 call)     │  Verdict + explanation from tool output
-│  No function-calling loop    │  (or DEMO_MODE rule-based fallback)
-└──────────────┬──────────────┘
-               ▼
-         reviews / events / tool_calls
-```
-
-**Why:** All release checks must always run. The LLM synthesizes a verdict from real findings — it does not decide whether to call tools.
+If the agent call fails, times out, or hits a rate limit, the backend falls back to a
+deterministic rule-based verdict computed directly from the same tool functions (see
+`agent/parsers.py::format_rule_based_response`). This is a documented tradeoff: it trades some of
+the LLM's judgment for guaranteed availability during a live demo. The API response includes a
+`fallback_used` flag so this is never silently hidden.
 
 ## Architecture
 
@@ -46,7 +32,7 @@ Two deployable services — the Python agent does **not** run on Vercel.
 
 ```
 ├── frontend/          # Next.js + Tailwind + shadcn
-├── agent/             # FastAPI + tool pipeline + LLM synthesis
+├── agent/             # FastAPI + deepagents harness + deterministic fallback
 │   └── scripts/       # reset_demo_data.py
 ├── supabase/
 │   └── migrations/
@@ -120,7 +106,7 @@ Run again immediately before final submission to wipe test history.
 | `SUPABASE_SERVICE_KEY` | Service role key (backend only) |
 | `AGENT_MODEL` | Optional. Default `google_genai:gemini-2.5-flash` |
 | `GEMINI_MODEL_FALLBACK` | Optional fallback model if primary hits quota (e.g. `gemini-2.5-flash-lite`) |
-| `DEMO_MODE` | Set `true` to skip LLM and use rule-based synthesis (tools still run) |
+| `DEMO_MODE` | Set `true` to skip the deep agent and use rule-based fallback (tools still run) |
 | `CORS_ORIGINS` | Optional comma-separated origins (default `*`) |
 
 **Frontend (`frontend/.env.local`)**:
@@ -191,7 +177,7 @@ Returns `503` with a clean message if Gemini rate-limited.
 
 1. Click **Sample: Go**, **Sample: No-Go**, **Sample: Conditional** — show full verdict range
 2. Expand **Release checks** trace — every row is a real function call with input + output
-3. Walk through `agent/tools.py` and `agent/synthesis.py` — deterministic pipeline + LLM synthesis
+3. Walk through `agent/tools.py` and `agent/deep_agent.py` — custom tools + deep agent harness
 
 ## Next steps
 

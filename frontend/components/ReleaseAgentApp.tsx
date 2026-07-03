@@ -22,6 +22,7 @@ export function ReleaseAgentApp() {
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fallbackUsed, setFallbackUsed] = useState(false);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -41,6 +42,7 @@ export function ReleaseAgentApp() {
 
   async function loadReviewDetails(review: Review) {
     setSelectedReview(review);
+    setFallbackUsed(false);
     try {
       const [reviewEvents, reviewToolCalls] = await Promise.all([
         fetchReviewEvents(review.id),
@@ -58,9 +60,11 @@ export function ReleaseAgentApp() {
   async function handleSubmit(inputText: string, title?: string) {
     setLoading(true);
     setError(null);
+    setFallbackUsed(false);
 
     try {
       const result = await submitReview(inputText, title);
+      setFallbackUsed(result.fallback_used ?? false);
       await loadHistory();
 
       const refreshed = await fetchReviews();
@@ -100,8 +104,8 @@ export function ReleaseAgentApp() {
           Release Readiness Agent
         </h1>
         <p className="max-w-3xl text-muted-foreground">
-          Paste a PR description or diff. Release checks run first, then the
-          agent synthesizes a go / no-go verdict from those results.
+          Paste a PR description or diff. The deep agent runs release checks via
+          tool calls and produces a go / no-go verdict.
         </p>
       </header>
 
@@ -114,7 +118,11 @@ export function ReleaseAgentApp() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
         <div className="space-y-6">
           <ChatPanel onSubmit={handleSubmit} loading={loading} />
-          <VerdictCard review={selectedReview} loading={loading} />
+          <VerdictCard
+            review={selectedReview}
+            loading={loading}
+            fallbackUsed={fallbackUsed}
+          />
         </div>
 
         <div className="space-y-4">
