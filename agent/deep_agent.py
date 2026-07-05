@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from deepagents import SubAgent, create_deep_agent
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 from prompts import SYSTEM_PROMPT
 from tools import (
@@ -17,13 +17,8 @@ from tools import (
 )
 
 
-def _model_name(env_var: str, default: str) -> str:
-    raw = os.getenv(env_var, default)
-    return raw.split(":", 1)[-1]
-
-
-def _build_model() -> ChatGoogleGenerativeAI:
-    return ChatGoogleGenerativeAI(model=_model_name("AGENT_MODEL", "gemini-2.5-flash-lite"))
+def _build_model() -> ChatOpenAI:
+    return ChatOpenAI(model=os.getenv("AGENT_MODEL", "gpt-4o-mini"))
 
 
 _model = _build_model()
