@@ -1,5 +1,3 @@
-import { Clock3 } from "lucide-react";
-
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -12,10 +10,16 @@ interface ReviewHistoryProps {
 }
 
 const verdictBadge: Record<string, string> = {
-  go: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
+  go: "border-verdict-go/25 bg-verdict-go/8 text-verdict-go",
   "go-with-conditions":
-    "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-  "no-go": "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200",
+    "border-verdict-conditional/25 bg-verdict-conditional/8 text-verdict-conditional",
+  "no-go": "border-verdict-nogo/25 bg-verdict-nogo/8 text-verdict-nogo",
+};
+
+const verdictDot: Record<string, string> = {
+  go: "status-dot-go",
+  "go-with-conditions": "status-dot-conditional",
+  "no-go": "status-dot-nogo",
 };
 
 export function ReviewHistory({
@@ -25,46 +29,50 @@ export function ReviewHistory({
 }: ReviewHistoryProps) {
   if (reviews.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+      <div className="rounded-xl border border-dashed border-border/80 bg-surface-elevated p-8 text-center text-sm font-light text-muted-foreground">
         No reviews yet. Your history will appear here after the first run.
       </div>
     );
   }
 
   return (
-    <ScrollArea className="h-[420px] rounded-lg border">
-      <div className="divide-y">
+    <ScrollArea className="h-[460px] rounded-xl border border-border/70 bg-surface">
+      <div className="divide-y divide-border/60">
         {reviews.map((review) => (
           <button
             key={review.id}
             type="button"
             onClick={() => onSelect(review)}
             className={cn(
-              "w-full px-4 py-3 text-left transition-colors hover:bg-muted/50",
-              selectedId === review.id && "bg-muted"
+              "w-full px-5 py-4 text-left transition-all duration-300 hover:bg-muted/40",
+              selectedId === review.id &&
+                "bg-brand/5 ring-1 ring-inset ring-brand/15"
             )}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate font-medium">
+                <p className="truncate font-light tracking-tight">
                   {review.title || "Untitled review"}
                 </p>
-                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock3 className="size-3" />
+                <p className="mt-1.5 text-xs font-light text-muted-foreground">
                   {new Date(review.created_at).toLocaleString()}
                 </p>
               </div>
               {review.verdict ? (
                 <Badge
                   className={cn(
-                    "shrink-0 capitalize",
+                    "shrink-0 gap-1.5 rounded-full border font-light capitalize",
                     verdictBadge[review.verdict]
                   )}
                 >
+                  <span
+                    className={cn("status-dot", verdictDot[review.verdict])}
+                    aria-hidden
+                  />
                   {review.verdict.replace(/-/g, " ")}
                 </Badge>
               ) : (
-                <Badge variant="outline" className="shrink-0 capitalize">
+                <Badge variant="outline" className="shrink-0 font-light capitalize">
                   {review.status}
                 </Badge>
               )}

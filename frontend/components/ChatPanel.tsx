@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +47,13 @@ const SAMPLES = {
   },
 } as const;
 
+const sampleStyles = {
+  go: "border-verdict-go/25 text-verdict-go hover:bg-verdict-go/5",
+  noGo: "border-verdict-nogo/25 text-verdict-nogo hover:bg-verdict-nogo/5",
+  conditional:
+    "border-verdict-conditional/25 text-verdict-conditional hover:bg-verdict-conditional/5",
+} as const;
+
 export function ChatPanel({ onSubmit, loading }: ChatPanelProps) {
   const [title, setTitle] = useState("");
   const [inputText, setInputText] = useState("");
@@ -64,24 +70,24 @@ export function ChatPanel({ onSubmit, loading }: ChatPanelProps) {
   }
 
   return (
-    <Card>
+    <Card className="border-border/70 bg-surface shadow-[0_8px_40px_-16px_rgba(17,17,16,0.08)]">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Sparkles className="size-5" />
+        <CardTitle className="text-xl font-light tracking-tight">
           New release review
         </CardTitle>
-        <CardDescription>
-          Paste a PR title, description, or diff. Release checks run first,
-          then the agent synthesizes a verdict from those results.
+        <CardDescription className="font-light leading-relaxed">
+          Paste a PR title, description, or diff. Release checks run first, then
+          the agent synthesizes a verdict from those results.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         <Input
           placeholder="PR title (optional)"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           disabled={loading}
           aria-label="PR title"
+          className="h-10 font-light"
         />
         <Textarea
           placeholder="Paste PR description or diff…"
@@ -89,56 +95,40 @@ export function ChatPanel({ onSubmit, loading }: ChatPanelProps) {
           onChange={(e) => setInputText(e.target.value)}
           rows={12}
           disabled={loading}
-          className="font-mono text-sm"
+          className="font-mono text-sm font-light leading-relaxed"
           aria-label="PR description or diff"
         />
         <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={handleSubmit} disabled={loading || !inputText.trim()}>
+          <Button
+            onClick={handleSubmit}
+            disabled={loading || !inputText.trim()}
+            className="h-9 px-5 font-light"
+          >
             {loading ? (
-              <>
-                <Loader2 className="animate-spin" />
-                Running review…
-              </>
+              <span className="flex items-center gap-2">
+                <span className="spinner" aria-hidden />
+                Running review
+              </span>
             ) : (
               "Run review"
             )}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={loading}
-            className={cn(
-              "border-emerald-300 text-emerald-800 hover:bg-emerald-50",
-              "dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950"
-            )}
-            onClick={() => loadSample("go")}
-          >
-            Sample: Go
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={loading}
-            className={cn(
-              "border-red-300 text-red-800 hover:bg-red-50",
-              "dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950"
-            )}
-            onClick={() => loadSample("noGo")}
-          >
-            Sample: No-Go
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={loading}
-            className={cn(
-              "border-amber-300 text-amber-800 hover:bg-amber-50",
-              "dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-950"
-            )}
-            onClick={() => loadSample("conditional")}
-          >
-            Sample: Conditional
-          </Button>
+          {(Object.keys(SAMPLES) as Array<keyof typeof SAMPLES>).map((kind) => (
+            <Button
+              key={kind}
+              type="button"
+              variant="outline"
+              disabled={loading}
+              className={cn("h-9 font-light", sampleStyles[kind])}
+              onClick={() => loadSample(kind)}
+            >
+              {kind === "go"
+                ? "Sample: Go"
+                : kind === "noGo"
+                  ? "Sample: No-Go"
+                  : "Sample: Conditional"}
+            </Button>
+          ))}
         </div>
       </CardContent>
     </Card>

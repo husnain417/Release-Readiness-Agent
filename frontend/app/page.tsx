@@ -1,5 +1,5 @@
-import { ReleaseAgentApp } from "@/components/ReleaseAgentApp";
+import { LandingPage } from "@/components/landing/LandingPage";
 
 export default function Home() {
-  return <ReleaseAgentApp />;
+  return <LandingPage />;
 }

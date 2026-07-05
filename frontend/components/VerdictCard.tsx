@@ -1,5 +1,3 @@
-import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
-
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -16,23 +14,25 @@ const verdictConfig: Record<
   {
     label: string;
     badgeClass: string;
-    icon: typeof CheckCircle2;
+    dotClass: string;
   }
 > = {
   go: {
     label: "GO",
-    badgeClass: "bg-emerald-600 text-white border-emerald-600",
-    icon: CheckCircle2,
+    badgeClass:
+      "border-verdict-go/30 bg-verdict-go/8 text-verdict-go",
+    dotClass: "status-dot-go",
   },
   "go-with-conditions": {
     label: "GO WITH CONDITIONS",
-    badgeClass: "bg-amber-500 text-white border-amber-500",
-    icon: AlertTriangle,
+    badgeClass:
+      "border-verdict-conditional/30 bg-verdict-conditional/8 text-verdict-conditional",
+    dotClass: "status-dot-conditional",
   },
   "no-go": {
     label: "NO-GO",
-    badgeClass: "bg-red-600 text-white border-red-600",
-    icon: XCircle,
+    badgeClass: "border-verdict-nogo/30 bg-verdict-nogo/8 text-verdict-nogo",
+    dotClass: "status-dot-nogo",
   },
 };
 
@@ -45,15 +45,19 @@ interface VerdictCardProps {
 export function VerdictCard({ review, loading, fallbackUsed }: VerdictCardProps) {
   if (loading) {
     return (
-      <Card className="h-full">
+      <Card className="h-full border-border/70 bg-surface">
         <CardHeader>
-          <CardTitle>Release verdict</CardTitle>
-          <CardDescription>Agent is reviewing your change…</CardDescription>
+          <CardTitle className="text-xl font-light tracking-tight">
+            Release verdict
+          </CardTitle>
+          <CardDescription className="font-light">
+            Agent is reviewing your change
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3 text-muted-foreground">
-            <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            Running tools and synthesizing recommendation…
+          <div className="flex items-center gap-3 font-light text-muted-foreground">
+            <span className="spinner spinner-lg" aria-hidden />
+            Running tools and synthesizing recommendation
           </div>
         </CardContent>
       </Card>
@@ -62,17 +66,19 @@ export function VerdictCard({ review, loading, fallbackUsed }: VerdictCardProps)
 
   if (!review) {
     return (
-      <Card className="h-full">
+      <Card className="h-full border-border/70 bg-surface-elevated">
         <CardHeader>
-          <CardTitle>Release verdict</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-xl font-light tracking-tight">
+            Release verdict
+          </CardTitle>
+          <CardDescription className="font-light">
             Paste a PR description or diff and run a review.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            The agent will flag risky patterns, check for test coverage,
-            consult incident history, and produce a rollback plan.
+          <p className="font-light leading-relaxed text-muted-foreground">
+            The agent will flag risky patterns, check for test coverage, consult
+            incident history, and produce a rollback plan.
           </p>
         </CardContent>
       </Card>
@@ -81,51 +87,59 @@ export function VerdictCard({ review, loading, fallbackUsed }: VerdictCardProps)
 
   const verdict = review.verdict;
   const config = verdict ? verdictConfig[verdict] : null;
-  const Icon = config?.icon ?? AlertTriangle;
 
   return (
-    <Card className="h-full">
+    <Card className="h-full border-border/70 bg-surface transition-shadow hover:shadow-[0_8px_40px_-16px_rgba(17,17,16,0.08)]">
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <CardTitle>{review.title || "Review result"}</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-xl font-light tracking-tight">
+              {review.title || "Review result"}
+            </CardTitle>
+            <CardDescription className="font-light">
               {new Date(review.created_at).toLocaleString()}
             </CardDescription>
           </div>
           {config ? (
             <Badge
               className={cn(
-                "px-3 py-1 text-sm font-semibold tracking-wide",
+                "h-auto gap-2 rounded-full border px-3 py-1.5 text-xs font-light tracking-wide",
                 config.badgeClass
               )}
             >
-              <Icon className="size-4" />
+              <span className={cn("status-dot", config.dotClass)} aria-hidden />
               {config.label}
             </Badge>
           ) : (
-            <Badge variant="secondary">{review.status}</Badge>
+            <Badge variant="outline" className="font-light capitalize">
+              {review.status}
+            </Badge>
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         {fallbackUsed && (
-          <p className="text-xs text-muted-foreground rounded-md border border-dashed px-3 py-2">
-            Computed via deterministic fallback (deep agent unavailable or DEMO_MODE).
+          <p className="rounded-lg border border-dashed border-border px-4 py-3 text-xs font-light text-muted-foreground">
+            Computed via deterministic fallback (deep agent unavailable or
+            DEMO_MODE).
           </p>
         )}
         {review.summary && (
           <div>
-            <h3 className="mb-2 text-sm font-medium">Summary</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
+            <h3 className="mb-2 text-xs font-light uppercase tracking-[0.12em] text-ink-muted">
+              Summary
+            </h3>
+            <p className="font-light leading-relaxed text-muted-foreground whitespace-pre-wrap">
               {review.summary}
             </p>
           </div>
         )}
         {review.rollback_plan && (
-          <div className="rounded-lg border bg-muted/40 p-4">
-            <h3 className="mb-2 text-sm font-medium">Rollback plan</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
+          <div className="rounded-xl border border-border/60 bg-muted/40 p-5">
+            <h3 className="mb-2 text-xs font-light uppercase tracking-[0.12em] text-ink-muted">
+              Rollback plan
+            </h3>
+            <p className="font-light leading-relaxed text-muted-foreground whitespace-pre-wrap">
               {review.rollback_plan}
             </p>
           </div>

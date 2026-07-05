@@ -1,21 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+
+import { helveticaNeue } from "@/lib/fonts";
+
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "Release Readiness Agent",
+  title: "Clearpath — Release Readiness Agent",
   description:
-    "AI agent that reviews PRs for release readiness — risky changes, tests, rollback plans.",
+    "Automated release readiness reviews for pull requests. Risk analysis, test coverage, incident history, and rollback planning.",
 };
 
 export default function RootLayout({
@@ -24,10 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en" className={`${helveticaNeue.variable} h-full`}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
